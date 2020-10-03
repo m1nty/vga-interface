@@ -38,7 +38,8 @@ parameter DEFAULT_MESSAGE_LINE = 280;
 parameter DEFAULT_MESSAGE_START_COL = 360;
 parameter KEYBOARD_MESSAGE_LINE = 320;
 parameter KEYBOARD_MESSAGE_START_COL = 360;
-
+parameter COUNT_MESSAGE_LINE = 360;
+parameter COUNT_MESSAGE_START_COL = 360;
 logic resetn, enable;
 
 logic [7:0] VGA_red, VGA_green, VGA_blue;
@@ -52,11 +53,21 @@ logic screen_border_on;
 
 assign resetn = ~SWITCH_I[17];
 
-logic [7:0] PS2_code, PS2_reg;
+logic [3:0] numkey_presses[9:0];
+logic [5:0] character_temp;
+logic [3:0] current_count;
+logic [7:0] PS2_code;
+logic [7:0]PS2_reg [14:0];
 logic PS2_code_ready;
 
+logic nokey_flag;
+logic full_reg;
+
+logic [3:0]data_counter;
 logic PS2_code_ready_buf;
 logic PS2_make_code;
+logic [5:0]count_character0;
+logic[5:0]count_character1;
 
 // PS/2 controller
 PS2_controller ps2_unit (
@@ -73,15 +84,170 @@ PS2_controller ps2_unit (
 always_ff @ (posedge CLOCK_50_I or negedge resetn) begin
 	if (resetn == 1'b0) begin
 		PS2_code_ready_buf <= 1'b0;
-		PS2_reg <= 8'd0;
+		PS2_reg[0] <= 8'd0;
+		PS2_reg[1] <= 8'b0;
+		PS2_reg[2] <= 8'd0;
+		PS2_reg[3] <= 8'b0;
+		PS2_reg[4] <= 8'd0;
+		PS2_reg[5] <= 8'b0;
+		PS2_reg[6] <= 8'd0;
+		PS2_reg[7] <= 8'b0;
+		PS2_reg[8] <= 8'd0;
+		PS2_reg[9] <= 8'b0;
+		PS2_reg[10] <= 8'd0;
+		PS2_reg[11] <= 8'b0;
+		PS2_reg[12] <= 8'd0;
+		PS2_reg[13] <= 8'b0;
+		PS2_reg[14] <= 8'd0;
+		data_counter <= 1'b0;
+		numkey_presses[0] <= 1'b0;
+		numkey_presses[1] <= 1'b0;
+		numkey_presses[2] <= 1'b0;
+		numkey_presses[3] <= 1'b0;
+		numkey_presses[4] <= 1'b0;
+		numkey_presses[5] <= 1'b0;
+		numkey_presses[6] <= 1'b0;
+		numkey_presses[7] <= 1'b0;
+		numkey_presses[8] <= 1'b0;
+		numkey_presses[9] <= 1'b0;
+		nokey_flag <= 1'b0;
+		current_count <= 1'b0;
+		character_temp <= 1'b0;
+		full_reg <= 1'b0;
+		count_character0 <= 1'b0;
+		count_character1 <= 1'b0;
 	end else begin
 		PS2_code_ready_buf <= PS2_code_ready;
+		
+		if(data_counter == 15) begin
+			data_counter <= 1'd0;
+			if(current_count > 9)begin
+				count_character1 <= 6'o61;
+			end else begin
+				count_character1 <= 6'o60;
+			end
+			case (current_count)
+				4'b00:   count_character0 <= 6'o60; // 0
+				4'b0001:   count_character0 <= 6'o61; // 1
+				4'b0010:   count_character0 <= 6'o62; // 2
+				4'b0011:   count_character0 <= 6'o63; // 3
+				4'b0100:   count_character0 <= 6'o64; // 4
+				4'b0101:   count_character0 <= 6'o65; // 5
+				4'b0110:   count_character0 <= 6'o66; // 6
+				4'b0111:   count_character0 <= 6'o67; // 7
+				4'b1000:   count_character0 <= 6'o70; // 8
+				4'b1001:   count_character0 <= 6'o71; // 9
+				4'b1010:   count_character0 <= 6'o60; // 10
+				4'b1011:   count_character0 <= 6'o61; // 11
+				4'b1100:   count_character0 <= 6'o62; // 12
+				4'b1101:   count_character0 <= 6'o63; // 13
+				4'b1110:   count_character0 <= 6'o64; // 14
+				4'b1111:   count_character0 <= 6'o65; // 15
+				default: count_character0 <= 6'o40; // space
+			endcase
+			if(current_count == 1'b0) begin
+				nokey_flag <= 1'b1;
+			end
+		end
+		
 		if (PS2_code_ready && ~PS2_code_ready_buf && PS2_make_code) begin
 			// scan code detected
-			PS2_reg <= PS2_code;
+
+			if(data_counter < 4'd15)begin
+				nokey_flag <= 1'b0;
+				if(PS2_code == 8'h45) begin
+					PS2_reg[data_counter] <= PS2_code;
+					if(current_count <= numkey_presses[0] + 1'b1 && 6'o60 >= character_temp)begin
+						current_count <= numkey_presses[0] + 1'b1;
+						character_temp <= 6'o60;
+					end
+					numkey_presses[0] <= numkey_presses[0] + 1'b1;
+					
+				end else if(PS2_code == 8'h16) begin
+					PS2_reg[data_counter] <= PS2_code;
+					if(current_count <= numkey_presses[1] + 1'b1 && 6'o61 >= character_temp)begin
+						current_count <= numkey_presses[1] + 1'b1;
+						character_temp <= 6'o61;
+					end
+					numkey_presses[1] <= numkey_presses[1] + 1'b1;
+					
+				end else if(PS2_code == 8'h1E) begin
+					PS2_reg[data_counter] <= PS2_code;
+					if(current_count <= numkey_presses[2] + 1'b1 && 6'o62 >= character_temp)begin
+						current_count <= numkey_presses[2] +1'b1;
+						character_temp <= 6'o62;
+					end
+					numkey_presses[2] <= numkey_presses[2] + 1'b1;
+					
+				end else if(PS2_code == 8'h26) begin
+					PS2_reg[data_counter] <= PS2_code;
+					if(current_count <= numkey_presses[3] + 1'b1 && 6'o63 >= character_temp)begin
+						current_count <= numkey_presses[3] + 1'b1;
+						character_temp <= 6'o63;
+					end
+					numkey_presses[3] <= numkey_presses[3] + 1'b1;
+					
+				end else if(PS2_code == 8'h25) begin
+					PS2_reg[data_counter] <= PS2_code;
+					if(current_count <= numkey_presses[4] + 1'b1 && 6'o64 >= character_temp)begin
+						current_count <= numkey_presses[4] + 1'b1;
+						character_temp <= 6'o64;
+					end
+					numkey_presses[4] <= numkey_presses[4] + 1'b1;
+					
+				end else if(PS2_code == 8'h2E) begin
+					PS2_reg[data_counter] <= PS2_code;
+					if(current_count <= numkey_presses[5] + 1'b1 && 6'o65 >= character_temp)begin
+						current_count <= numkey_presses[5] + 1'b1;
+						character_temp <= 6'o65;
+					end
+					numkey_presses[5] <= numkey_presses[5] + 1'b1;
+					
+				end else if(PS2_code == 8'h36) begin
+					PS2_reg[data_counter] <= PS2_code;
+					if(current_count <= numkey_presses[6] + 1'b1 && 6'o66 >= character_temp)begin
+						current_count <= numkey_presses[6] + 1'b1;
+						character_temp <= 6'o66;
+					end
+					numkey_presses[6] <= numkey_presses[6] + 1'b1;
+					
+				end else if(PS2_code == 8'h3D) begin
+					PS2_reg[data_counter] <= PS2_code;
+					if(current_count <= numkey_presses[7] + 1'b1 && 6'o67 >= character_temp)begin
+						current_count <= numkey_presses[7] + 1'b1;
+						character_temp <= 6'o67;
+					end
+					numkey_presses[7] <= numkey_presses[7] + 1'b1;
+					
+				end else if(PS2_code == 8'h3E) begin
+					PS2_reg[data_counter] <= PS2_code;
+					if(current_count <= numkey_presses[8] + 1'b1 && 6'o70 >= character_temp)begin
+						current_count <= numkey_presses[8] + 1'b1;
+						character_temp <= 6'o70;
+					end
+					numkey_presses[8] <= numkey_presses[8] + 1'b1;
+					
+				end else if(PS2_code == 8'h46) begin
+					PS2_reg[data_counter] <= PS2_code;
+					if(current_count <= numkey_presses[9] + 1'b1 && 6'o71 >= character_temp)begin
+						current_count <= numkey_presses[9] + 1'b1;
+						character_temp <= 6'o71;
+					end
+					numkey_presses[9] <= numkey_presses[9] + 1'b1;
+					
+				end else begin
+					PS2_reg[data_counter] <= 8'h29;
+				end
+				
+				data_counter <= data_counter + 1'd1;
+				
+			end 	
 		end
 	end
 end
+
+
+
 
 VGA_controller VGA_unit(
 	.clock(CLOCK_50_I),
@@ -119,10 +285,9 @@ char_rom char_rom_unit (
 	.Clock(CLOCK_50_I),
 	.Character_address(character_address),
 	.Font_row(pixel_Y_pos[2:0]),
-	.Font_col(pixel_X_pos[2:0]),
+	.Font_col(delay_X_pos[2:0]),
 	.Rom_mux_output(rom_mux_output)
 );
-
 // this experiment is in the 800x600 @ 72 fps mode
 assign enable = 1'b1;
 assign VGA_CLOCK_O = ~CLOCK_50_I;
@@ -154,26 +319,86 @@ always_comb begin
 			(DEFAULT_MESSAGE_START_COL >> 3) +  5: character_address = 6'o40; // space
 			(DEFAULT_MESSAGE_START_COL >> 3) +  6: character_address = 6'o05; // E
 			(DEFAULT_MESSAGE_START_COL >> 3) +  7: character_address = 6'o30; // X
-			(DEFAULT_MESSAGE_START_COL >> 3) +  8: character_address = 6'o20; // P
-			(DEFAULT_MESSAGE_START_COL >> 3) +  9: character_address = 6'o40; // space
-			(DEFAULT_MESSAGE_START_COL >> 3) + 10: character_address = 6'o64; // 4			
-			(DEFAULT_MESSAGE_START_COL >> 3) + 11: character_address = 6'o40; // space
-			(DEFAULT_MESSAGE_START_COL >> 3) + 12: character_address = 6'o03; // C
-			(DEFAULT_MESSAGE_START_COL >> 3) + 13: character_address = 6'o10; // H
-			(DEFAULT_MESSAGE_START_COL >> 3) + 14: character_address = 6'o05; // E
-			(DEFAULT_MESSAGE_START_COL >> 3) + 15: character_address = 6'o03; // C
-			(DEFAULT_MESSAGE_START_COL >> 3) + 16: character_address = 6'o13; // K
-			(DEFAULT_MESSAGE_START_COL >> 3) + 17: character_address = 6'o40; // space
-			(DEFAULT_MESSAGE_START_COL >> 3) + 18: character_address = 6'o60; // 0	
+			(DEFAULT_MESSAGE_START_COL >> 3) +  8: character_address = 6'o05; // E
+			(DEFAULT_MESSAGE_START_COL >> 3) +  9: character_address = 6'o22; // R
+			(DEFAULT_MESSAGE_START_COL >> 3) + 10: character_address = 6'o03; // C			
+			(DEFAULT_MESSAGE_START_COL >> 3) + 11: character_address = 6'o11; // I
+			(DEFAULT_MESSAGE_START_COL >> 3) + 12: character_address = 6'o23; // S
+			(DEFAULT_MESSAGE_START_COL >> 3) + 13: character_address = 6'o05; // E
+			(DEFAULT_MESSAGE_START_COL >> 3) + 14: character_address = 6'o40; // space
+			(DEFAULT_MESSAGE_START_COL >> 3) + 15: character_address = 6'o07; // G
+			(DEFAULT_MESSAGE_START_COL >> 3) + 16: character_address = 6'o22; // R
+			(DEFAULT_MESSAGE_START_COL >> 3) + 17: character_address = 6'o17; // O
+			(DEFAULT_MESSAGE_START_COL >> 3) + 18: character_address = 6'o25; // U	
+			(DEFAULT_MESSAGE_START_COL >> 3) + 19: character_address = 6'o20; // P
+			(DEFAULT_MESSAGE_START_COL >> 3) + 20: character_address = 6'o40; // space
+			(DEFAULT_MESSAGE_START_COL >> 3) + 21: character_address = 6'o64; // 4
+			(DEFAULT_MESSAGE_START_COL >> 3) + 22: character_address = 6'o61; // 1
 			default: character_address = 6'o40; // space
 		endcase
 	end
-
+	
+	if(nokey_flag == 1'b0) begin
+		if (pixel_Y_pos[9:3] == ((COUNT_MESSAGE_LINE) >> 3)) begin
+			// Reach the section where the text is displayed
+			case (pixel_X_pos[9:3])
+				(COUNT_MESSAGE_START_COL >> 3) +  0: character_address = 6'o13; // K
+				(COUNT_MESSAGE_START_COL >> 3) +  1: character_address = 6'o05; // E
+				(COUNT_MESSAGE_START_COL >> 3) +  2: character_address = 6'o31; // Y
+				(COUNT_MESSAGE_START_COL >> 3) +  3: character_address = 6'o40; // space
+				(COUNT_MESSAGE_START_COL >> 3) +  4: character_address = character_temp;		
+				(COUNT_MESSAGE_START_COL >> 3) +  5: character_address = 6'o40; // space
+				(COUNT_MESSAGE_START_COL >> 3) +  6: character_address = 6'o20; // P
+				(COUNT_MESSAGE_START_COL >> 3) +  7: character_address = 6'o22; // R
+				(COUNT_MESSAGE_START_COL >> 3) +  8: character_address = 6'o05; // E
+				(COUNT_MESSAGE_START_COL >> 3) +  9: character_address = 6'o23; // S
+				(COUNT_MESSAGE_START_COL >> 3) + 10: character_address = 6'o23; // S			
+				(COUNT_MESSAGE_START_COL >> 3) + 11: character_address = 6'o05; // E
+				(COUNT_MESSAGE_START_COL >> 3) + 12: character_address = 6'o04; // D
+				(COUNT_MESSAGE_START_COL >> 3) + 13: character_address = 6'o40; // space
+				(COUNT_MESSAGE_START_COL >> 3) + 15: character_address = count_character1;
+				(COUNT_MESSAGE_START_COL >> 3) + 16: character_address = count_character0;
+				(COUNT_MESSAGE_START_COL >> 3) + 17: character_address = 6'o40; // space
+				(COUNT_MESSAGE_START_COL >> 3) + 18: character_address = 6'o24; // T
+				(COUNT_MESSAGE_START_COL >> 3) + 19: character_address = 6'o11; // I
+				(COUNT_MESSAGE_START_COL >> 3) + 20: character_address = 6'o15; // M	
+				(COUNT_MESSAGE_START_COL >> 3) + 21: character_address = 6'o05; // E	
+				(COUNT_MESSAGE_START_COL >> 3) + 22: character_address = 6'o23; // S	
+				default: character_address = 6'o40; // space
+			endcase
+		end
+	end else begin
+		if (pixel_Y_pos[9:3] == ((COUNT_MESSAGE_LINE) >> 3)) begin
+			// Reach the section where the text is displayed
+			case (pixel_X_pos[9:3])
+				(COUNT_MESSAGE_START_COL >> 3) +  0: character_address = 6'o16; // N
+				(COUNT_MESSAGE_START_COL >> 3) +  1: character_address = 6'o17; // O
+				(COUNT_MESSAGE_START_COL >> 3) +  2: character_address = 6'o40; // space
+				(COUNT_MESSAGE_START_COL >> 3) +  3: character_address = 6'o16; // N
+				(COUNT_MESSAGE_START_COL >> 3) +  4: character_address = 6'o25; // U	
+				(COUNT_MESSAGE_START_COL >> 3) +  5: character_address = 6'o15; // M
+				(COUNT_MESSAGE_START_COL >> 3) +  6: character_address = 6'o40; // space
+				(COUNT_MESSAGE_START_COL >> 3) +  7: character_address = 6'o13; // K
+				(COUNT_MESSAGE_START_COL >> 3) +  8: character_address = 6'o05; // E
+				(COUNT_MESSAGE_START_COL >> 3) +  9: character_address = 6'o31; // Y
+				(COUNT_MESSAGE_START_COL >> 3) + 10: character_address = 6'o23; // S			
+				(COUNT_MESSAGE_START_COL >> 3) + 11: character_address = 6'o40; // space
+				(COUNT_MESSAGE_START_COL >> 3) + 12: character_address = 6'o20; // P
+				(COUNT_MESSAGE_START_COL >> 3) + 13: character_address = 6'o22; // R
+				(COUNT_MESSAGE_START_COL >> 3) + 14: character_address = 6'o05; // E
+				(COUNT_MESSAGE_START_COL >> 3) + 15: character_address = 6'o23; // S
+				(COUNT_MESSAGE_START_COL >> 3) + 16: character_address = 6'o23; // S			
+				(COUNT_MESSAGE_START_COL >> 3) + 17: character_address = 6'o05; // E
+				(COUNT_MESSAGE_START_COL >> 3) + 18: character_address = 6'o04; // D
+				default: character_address = 6'o40; // space
+			endcase
+		end
+	end
 	// 8 x 8 characters
 	if (pixel_Y_pos[9:3] == ((KEYBOARD_MESSAGE_LINE) >> 3)) begin
 		// Reach the section where the text is displayed
 		if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3)) begin
-			case (PS2_reg)
+			case (PS2_reg[0])
 				8'h45:   character_address = 6'o60; // 0
 				8'h16:   character_address = 6'o61; // 1
 				8'h1E:   character_address = 6'o62; // 2
@@ -187,6 +412,216 @@ always_comb begin
 				default: character_address = 6'o40; // space
 			endcase
 		end 	
+		if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 1) begin
+			case (PS2_reg[1])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
+				if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 2) begin
+			case (PS2_reg[2])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
+				if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 3) begin
+			case (PS2_reg[3])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
+				if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 4) begin
+			case (PS2_reg[4])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
+				if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 5) begin
+			case (PS2_reg[5])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
+				if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 6) begin
+			case (PS2_reg[6])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
+				if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 7) begin
+			case (PS2_reg[7])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
+				if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 8) begin
+			case (PS2_reg[8])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
+				if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 9) begin
+			case (PS2_reg[9])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
+				if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 10) begin
+			case (PS2_reg[10])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
+				if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 11) begin
+			case (PS2_reg[11])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
+				if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 12) begin
+			case (PS2_reg[12])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
+				if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 13) begin
+			case (PS2_reg[13])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
+				if (pixel_X_pos[9:3] == (KEYBOARD_MESSAGE_START_COL >> 3) + 14) begin
+			case (PS2_reg[14])
+				8'h45:   character_address = 6'o60; // 0
+				8'h16:   character_address = 6'o61; // 1
+				8'h1E:   character_address = 6'o62; // 2
+				8'h26:   character_address = 6'o63; // 3
+				8'h25:   character_address = 6'o64; // 4
+				8'h2E:   character_address = 6'o65; // 5
+				8'h36:   character_address = 6'o66; // 6
+				8'h3D:   character_address = 6'o67; // 7
+				8'h3E:   character_address = 6'o70; // 8
+				8'h46:   character_address = 6'o71; // 9
+				default: character_address = 6'o40; // space
+			endcase
+		end
 	end
 end
 
