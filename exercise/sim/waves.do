@@ -32,11 +32,11 @@ add wave -hex UUT/nokey_flag
 add wave -hex UUT/PS2_code
 add wave -hex UUT/PS2_reg
 add wave -hex UUT/numkey_presses
-add wave -hex UUT/character_temp
+add wave -hex UUT/char_temp
 add wave -hex UUT/count_character1
 add wave -hex UUT/count_character0
 add wave -hex UUT/numkey_presses
-add wave -hex UUT/current_count
+add wave -hex UUT/max_presses
 add wave -bin UUT/PS2_code_ready
 add wave -bin UUT/PS2_make_code
 

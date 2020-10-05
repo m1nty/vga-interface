@@ -32,6 +32,8 @@ module experiment4 (
 		input logic PS2_CLOCK_I                   // PS2 clock
 );
 
+integer i;
+
 `include "VGA_param.h"
 parameter SCREEN_BORDER_OFFSET = 32;
 parameter DEFAULT_MESSAGE_LINE = 280;
@@ -54,8 +56,8 @@ logic screen_border_on;
 assign resetn = ~SWITCH_I[17];
 
 logic [3:0] numkey_presses[9:0];
-logic [5:0] character_temp;
-logic [3:0] current_count;
+logic [5:0] char_temp;
+logic [3:0] max_presses;
 logic [7:0] PS2_code;
 logic [7:0]PS2_reg [14:0];
 logic PS2_code_ready;
@@ -84,49 +86,35 @@ PS2_controller ps2_unit (
 always_ff @ (posedge CLOCK_50_I or negedge resetn) begin
 	if (resetn == 1'b0) begin
 		PS2_code_ready_buf <= 1'b0;
-		PS2_reg[0] <= 8'd0;
-		PS2_reg[1] <= 8'b0;
-		PS2_reg[2] <= 8'd0;
-		PS2_reg[3] <= 8'b0;
-		PS2_reg[4] <= 8'd0;
-		PS2_reg[5] <= 8'b0;
-		PS2_reg[6] <= 8'd0;
-		PS2_reg[7] <= 8'b0;
-		PS2_reg[8] <= 8'd0;
-		PS2_reg[9] <= 8'b0;
-		PS2_reg[10] <= 8'd0;
-		PS2_reg[11] <= 8'b0;
-		PS2_reg[12] <= 8'd0;
-		PS2_reg[13] <= 8'b0;
-		PS2_reg[14] <= 8'd0;
+		for (i=0; i<15; i=i+1) begin
+			PS2_reg[i] <= 8'd0;
+		end
 		data_counter <= 1'b0;
-		numkey_presses[0] <= 1'b0;
-		numkey_presses[1] <= 1'b0;
-		numkey_presses[2] <= 1'b0;
-		numkey_presses[3] <= 1'b0;
-		numkey_presses[4] <= 1'b0;
-		numkey_presses[5] <= 1'b0;
-		numkey_presses[6] <= 1'b0;
-		numkey_presses[7] <= 1'b0;
-		numkey_presses[8] <= 1'b0;
-		numkey_presses[9] <= 1'b0;
+		for (i=0; i<10; i=i+1) begin
+			numkey_presses[i] <= 1'b0;
+		end
 		nokey_flag <= 1'b0;
-		current_count <= 1'b0;
-		character_temp <= 1'b0;
+		// if no key is found
+		max_presses <= 1'b0;
+		// holds the max amount of presses
+		char_temp <= 1'b0;
+		// temp variable to hold char
 		full_reg <= 1'b0;
 		count_character0 <= 1'b0;
+		// holds 0's column of character for BCD display
 		count_character1 <= 1'b0;
+		// holds 1's column of character for BCD display
 	end else begin
 		PS2_code_ready_buf <= PS2_code_ready;
 		
 		if(data_counter == 15) begin
 			data_counter <= 1'd0;
-			if(current_count > 9)begin
+			if(max_presses > 9)begin
 				count_character1 <= 6'o61;
 			end else begin
 				count_character1 <= 6'o60;
 			end
-			case (current_count)
+			case (max_presses)
 				4'b00:   count_character0 <= 6'o60; // 0
 				4'b0001:   count_character0 <= 6'o61; // 1
 				4'b0010:   count_character0 <= 6'o62; // 2
@@ -145,7 +133,7 @@ always_ff @ (posedge CLOCK_50_I or negedge resetn) begin
 				4'b1111:   count_character0 <= 6'o65; // 15
 				default: count_character0 <= 6'o40; // space
 			endcase
-			if(current_count == 1'b0) begin
+			if(max_presses == 1'b0) begin
 				nokey_flag <= 1'b1;
 			end
 		end
@@ -157,81 +145,83 @@ always_ff @ (posedge CLOCK_50_I or negedge resetn) begin
 				nokey_flag <= 1'b0;
 				if(PS2_code == 8'h45) begin
 					PS2_reg[data_counter] <= PS2_code;
-					if(current_count <= numkey_presses[0] + 1'b1 && 6'o60 >= character_temp)begin
-						current_count <= numkey_presses[0] + 1'b1;
-						character_temp <= 6'o60;
+					// put key in register
+					if(max_presses <= numkey_presses[0] + 1'b1 && 6'o60 >= char_temp)begin
+						// check if the current count of the key is greater than the max counter
+						max_presses <= numkey_presses[0] + 1'b1;
+						char_temp <= 6'o60;
 					end
 					numkey_presses[0] <= numkey_presses[0] + 1'b1;
 					
 				end else if(PS2_code == 8'h16) begin
 					PS2_reg[data_counter] <= PS2_code;
-					if(current_count <= numkey_presses[1] + 1'b1 && 6'o61 >= character_temp)begin
-						current_count <= numkey_presses[1] + 1'b1;
-						character_temp <= 6'o61;
+					if(max_presses <= numkey_presses[1] + 1'b1 && 6'o61 >= char_temp)begin
+						max_presses <= numkey_presses[1] + 1'b1;
+						char_temp <= 6'o61;
 					end
 					numkey_presses[1] <= numkey_presses[1] + 1'b1;
 					
 				end else if(PS2_code == 8'h1E) begin
 					PS2_reg[data_counter] <= PS2_code;
-					if(current_count <= numkey_presses[2] + 1'b1 && 6'o62 >= character_temp)begin
-						current_count <= numkey_presses[2] +1'b1;
-						character_temp <= 6'o62;
+					if(max_presses <= numkey_presses[2] + 1'b1 && 6'o62 >= char_temp)begin
+						max_presses <= numkey_presses[2] +1'b1;
+						char_temp <= 6'o62;
 					end
 					numkey_presses[2] <= numkey_presses[2] + 1'b1;
 					
 				end else if(PS2_code == 8'h26) begin
 					PS2_reg[data_counter] <= PS2_code;
-					if(current_count <= numkey_presses[3] + 1'b1 && 6'o63 >= character_temp)begin
-						current_count <= numkey_presses[3] + 1'b1;
-						character_temp <= 6'o63;
+					if(max_presses <= numkey_presses[3] + 1'b1 && 6'o63 >= char_temp)begin
+						max_presses <= numkey_presses[3] + 1'b1;
+						char_temp <= 6'o63;
 					end
 					numkey_presses[3] <= numkey_presses[3] + 1'b1;
 					
 				end else if(PS2_code == 8'h25) begin
 					PS2_reg[data_counter] <= PS2_code;
-					if(current_count <= numkey_presses[4] + 1'b1 && 6'o64 >= character_temp)begin
-						current_count <= numkey_presses[4] + 1'b1;
-						character_temp <= 6'o64;
+					if(max_presses <= numkey_presses[4] + 1'b1 && 6'o64 >= char_temp)begin
+						max_presses <= numkey_presses[4] + 1'b1;
+						char_temp <= 6'o64;
 					end
 					numkey_presses[4] <= numkey_presses[4] + 1'b1;
 					
 				end else if(PS2_code == 8'h2E) begin
 					PS2_reg[data_counter] <= PS2_code;
-					if(current_count <= numkey_presses[5] + 1'b1 && 6'o65 >= character_temp)begin
-						current_count <= numkey_presses[5] + 1'b1;
-						character_temp <= 6'o65;
+					if(max_presses <= numkey_presses[5] + 1'b1 && 6'o65 >= char_temp)begin
+						max_presses <= numkey_presses[5] + 1'b1;
+						char_temp <= 6'o65;
 					end
 					numkey_presses[5] <= numkey_presses[5] + 1'b1;
 					
 				end else if(PS2_code == 8'h36) begin
 					PS2_reg[data_counter] <= PS2_code;
-					if(current_count <= numkey_presses[6] + 1'b1 && 6'o66 >= character_temp)begin
-						current_count <= numkey_presses[6] + 1'b1;
-						character_temp <= 6'o66;
+					if(max_presses <= numkey_presses[6] + 1'b1 && 6'o66 >= char_temp)begin
+						max_presses <= numkey_presses[6] + 1'b1;
+						char_temp <= 6'o66;
 					end
 					numkey_presses[6] <= numkey_presses[6] + 1'b1;
 					
 				end else if(PS2_code == 8'h3D) begin
 					PS2_reg[data_counter] <= PS2_code;
-					if(current_count <= numkey_presses[7] + 1'b1 && 6'o67 >= character_temp)begin
-						current_count <= numkey_presses[7] + 1'b1;
-						character_temp <= 6'o67;
+					if(max_presses <= numkey_presses[7] + 1'b1 && 6'o67 >= char_temp)begin
+						max_presses <= numkey_presses[7] + 1'b1;
+						char_temp <= 6'o67;
 					end
 					numkey_presses[7] <= numkey_presses[7] + 1'b1;
 					
 				end else if(PS2_code == 8'h3E) begin
 					PS2_reg[data_counter] <= PS2_code;
-					if(current_count <= numkey_presses[8] + 1'b1 && 6'o70 >= character_temp)begin
-						current_count <= numkey_presses[8] + 1'b1;
-						character_temp <= 6'o70;
+					if(max_presses <= numkey_presses[8] + 1'b1 && 6'o70 >= char_temp)begin
+						max_presses <= numkey_presses[8] + 1'b1;
+						char_temp <= 6'o70;
 					end
 					numkey_presses[8] <= numkey_presses[8] + 1'b1;
 					
 				end else if(PS2_code == 8'h46) begin
 					PS2_reg[data_counter] <= PS2_code;
-					if(current_count <= numkey_presses[9] + 1'b1 && 6'o71 >= character_temp)begin
-						current_count <= numkey_presses[9] + 1'b1;
-						character_temp <= 6'o71;
+					if(max_presses <= numkey_presses[9] + 1'b1 && 6'o71 >= char_temp)begin
+						max_presses <= numkey_presses[9] + 1'b1;
+						char_temp <= 6'o71;
 					end
 					numkey_presses[9] <= numkey_presses[9] + 1'b1;
 					
@@ -346,7 +336,7 @@ always_comb begin
 				(COUNT_MESSAGE_START_COL >> 3) +  1: character_address = 6'o05; // E
 				(COUNT_MESSAGE_START_COL >> 3) +  2: character_address = 6'o31; // Y
 				(COUNT_MESSAGE_START_COL >> 3) +  3: character_address = 6'o40; // space
-				(COUNT_MESSAGE_START_COL >> 3) +  4: character_address = character_temp;		
+				(COUNT_MESSAGE_START_COL >> 3) +  4: character_address = char_temp;		
 				(COUNT_MESSAGE_START_COL >> 3) +  5: character_address = 6'o40; // space
 				(COUNT_MESSAGE_START_COL >> 3) +  6: character_address = 6'o20; // P
 				(COUNT_MESSAGE_START_COL >> 3) +  7: character_address = 6'o22; // R
